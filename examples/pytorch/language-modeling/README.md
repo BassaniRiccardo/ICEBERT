@@ -14,7 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-## Language model training
+
+
+## ICEBERT Language model training
+
+The ICEBERT model builds on the BERT model, but includes 9 different languages:
+{Arabic, Bengali, English, Finnish, Indonesian, Korean, Russian, Swahili, Telugu}.
+
+### Data preparation
+
+1) Download wikipedia Dumps.
+2) Extract .xml dumps to .txt files using the WikiExtractor script.
+3) For each language, concatenate short sentences in the corpus so that all lines contain a number of tokens close to 512.
+This must be done manually here, since TPUs require the --line_by_line flag. While doing this, also create the cID corpus for each language.
+4) Compute the number of lines per corpus, get the oversampled number of lines (default ALPHA=0.3, cite paper) per language and create a single large corpus.
+English lines are mantained, while other languages' ones are duplicated. Shuffle the obtained corpus. Do this for both the baseline and the model.
+
+### Training
+1) Modify the script run_mlm.py so that it takes the correct txt files as input and loads the dataset using the path="text" as builder script.
+2) Call the training script from xla_spawn.py. Remeber to set --pad_to_max_length.
+
+
+
+
+## HuggingFace general language model training
 
 Fine-tuning (or training from scratch) the library models for language modeling on a text dataset for GPT, GPT-2,
 ALBERT, BERT, DistilBERT, RoBERTa, XLNet... GPT and GPT-2 are trained or fine-tuned using a causal language modeling

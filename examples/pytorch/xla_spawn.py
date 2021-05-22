@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """
 A simple launcher script for TPU training
 
@@ -18,7 +19,7 @@ Inspired by https://github.com/pytorch/pytorch/blob/master/torch/distributed/lau
 
 ::
     >>> python xla_spawn.py --num_cores=NUM_CORES_YOU_HAVE
-               YOUR_TRAINING_SCRIPT.py (--arg1 --arg2 --arg3 and all other
+               run_mlm.py (--arg1 --arg2 --arg3 and all other
                arguments of your training script)
 
 """
