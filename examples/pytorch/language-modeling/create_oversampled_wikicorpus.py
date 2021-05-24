@@ -42,7 +42,7 @@ def parse_args():
         '--data_folder',
         type=str,
         help='Specify absolute path to the folder containg data.',
-        default="/Users/ricca/Thesis/transformers/examples/pytorch/language-modeling/data"
+        default="transformers/examples/pytorch/language-modeling/data"
     )
     parser.add_argument(
         '--languages',
@@ -79,10 +79,10 @@ def parse_args():
 
 def get_corpus(ln, dense=False, cid=False):
     if dense:
-        return Path("/Users/ricca/Desktop/THESIS/txt/") / ln / ("dense_wiki_" + ln + "_" + args.max_seq + ".txt")
+        return Path(args.data_folder) / ("dense_wiki_" + ln + "_" + args.max_seq + ".txt")
     if cid:
-        return Path("/Users/ricca/Desktop/THESIS/txt/") / ln / ("cID_dense_wiki_" + ln + "_" + args.max_seq + ".txt")
-    return Path("/Users/ricca/Desktop/THESIS/txt/") / ln / ("wiki_" + ln + ".txt")
+        return Path(args.data_folder) / ("cID_dense_wiki_" + ln + "_" + args.max_seq + ".txt")
+    return Path(args.data_folder) / (ln + ".txt")
 
 
 def preprocess_corpus(ln, mapper, max_seq):
@@ -91,9 +91,13 @@ def preprocess_corpus(ln, mapper, max_seq):
         - a new baseline corpus, lowercased.
         - a new cID corpus, made of cID-strings.
     """
-    with open(get_corpus(ln, dense=False), "r", encoding='utf-8') as original_corpus, \
-         open(get_corpus(ln, dense=True), "w", encoding='utf-8') as dense_corpus, \
-         open(get_corpus(ln, cID=True), "w", encoding='utf-8') as cID_dense_corpus:
+    original_corpus_path=get_corpus(ln, dense=False)
+    dense_corpus_path=get_corpus(ln, dense=True)
+    cID_dense_corpus_path=get_corpus(ln, cID=True)
+
+    with open(original_corpus_path, "r", encoding='utf-8') as original_corpus, \
+            open(dense_corpus_path, "w", encoding='utf-8') as dense_corpus, \
+            open(cID_dense_corpus_path, "w", encoding='utf-8') as cID_dense_corpus:
             lines_list = original_corpus.read().splitlines()
             tokenizer = BertTokenizerFast(Path(args.icebert_folder) / args.monolingual_tokenizers_root_path / (ln + '.txt'), do_lower_case=False, add_special_tokens = True)
             sentence_tokenizer = NLTKSegmenter()
@@ -115,7 +119,8 @@ def preprocess_corpus(ln, mapper, max_seq):
                         dense_line = []
                         cID_dense_line = []
                         line_length = 0
-            return
+       
+    return
 
 
 def count_lines(ln, dense=True, get_longest_line=False):
@@ -214,6 +219,11 @@ def main(args):
         with open(Path(args.data_folder) / 'oversampling_factors.json', 'r') as fp:
             oversampling_factors = json.load(fp)
         create_oversampled_file(oversampling_factors)
+    # here debugginh actions
+    elif args.actions == "preprocess_test_corpus":
+        nltk.download('punkt')
+        cid_mapper = pickle.load(open(Path(args.icebert_folder) / args.cid_mapper_pickle_path, "rb"))
+        create_dense_corpora(original_corpus_path, dense_corpus_path, cID_dense_corpus_path, mapper, ln, max_seq)
     elif args.action == "longest_line_sw":
         count_lines("sw", get_longest_line=True)
     else:
