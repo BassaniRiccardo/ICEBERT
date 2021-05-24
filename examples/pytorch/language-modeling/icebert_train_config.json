@@ -3,7 +3,7 @@
 	"train_file" : "path_to_training_corpus",
 	"config_file" : "config_files/small_bert.json",
 	"max_seq_length" : 512,
-	"continue_training" = 0,
+	"continue_training" : 0,
 
 	"icebert_folder" : "transformers/examples/pytorch/language-modeling/icebert",
 	"output_models_folder" : "transformers/examples/pytorch/language-modeling/output_models",

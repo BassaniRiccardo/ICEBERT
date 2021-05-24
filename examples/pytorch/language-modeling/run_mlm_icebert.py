@@ -25,6 +25,8 @@ import logging
 import math
 import os
 import sys
+import json
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -46,13 +48,18 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version
 
-
-from transformers import BertConfig, BertTokenizer
+from transformers import BertConfig, BertTokenizer, BertForMaskedLM
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.7.0.dev0")
 
+logging.basicConfig(filename="logger_training",
+                        filemode='a',
+                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                        datefmt='%H:%M:%S',
+                        level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
@@ -64,7 +71,7 @@ class ModelArguments:
     """
     model_type: Optional[str] = field(
         default="uncased_baseline",
-        metadata={"help: uncased_baseline/cased_baseline/model"},
+        metadata={"help" : "uncased_baseline,  cased_baseline, or model"},
     )
     cache_dir: Optional[str] = field(
         default=None,
@@ -148,8 +155,8 @@ class DataTrainingArguments:
     )
 
     def __post_init__(self):
-        if self.dataset_name is None and self.train_file is None and self.validation_file is None:
-            raise ValueError("Need either a dataset name or a training/validation file.")
+        if self.train_file is None and self.validation_file is None:
+            raise ValueError("Need a training/validation file.")
         else:
             if self.train_file is not None:
                 extension = self.train_file.split(".")[-1]
@@ -175,7 +182,7 @@ def add_custom_args(hf_parser):
     hf_parser.add_argument(
             '--config_file',
             type=str,
-            defualt="config_files/small_bert.json",
+            default="config_files/small_bert.json",
             help="Path of the BertConfig json file, relative to the icebert folder"
         )
     hf_parser.add_argument('--continue_training', type=int, default=0, help="Whether to continue training or starting from scratch")
@@ -193,7 +200,7 @@ def main():
         # let's parse it to get our arguments.
         model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
     else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args, args = parser.parse_args_into_dataclasses()
 
     # Detecting last checkpoint.
     last_checkpoint = None
@@ -258,7 +265,7 @@ def main():
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
     }
-    tokenizer = BertTokenizer.from_pretrained( (Path(args.icebert_folder) / (data_args.max_seq_length + "_tokenizers") / (args.model_type + "_tokenizer")), **tokenizer_kwargs)
+    tokenizer = BertTokenizer.from_pretrained( (Path(args.icebert_folder) / (str(data_args.max_seq_length) + "_tokenizers") / (model_args.model_type + "_tokenizer")), **tokenizer_kwargs)
     
     with open(Path(args.icebert_folder) / args.config_file, 'r') as fp:
         config_dict = json.load(fp)
@@ -268,11 +275,11 @@ def main():
         "use_auth_token": True if model_args.use_auth_token else None,
     }
     config = BertConfig(vocab_size=tokenizer.vocab_size, max_position_embeddings=data_args.max_seq_length, \
-                        hidden_size=config_dict[hidden_size], num_hidden_layers=config_dict[num_hidden_layers], \
-                        num_attention_heads=config_dict[num_attention_heads], intermediate_size=config_dict[intermediate_size], \
-                        hidden_act=config_dict[hidden_act], hidden_dropout_prob=config_dict[hidden_dropout_prob], \
-                        attention_probs_dropout_prob=config_dict[attention_probs_dropout_prob], type_vocab_size=config_dict[type_vocab_size], \
-                        initializer_range=config_dict[initializer_range], layer_norm_eps=config_dict[layer_norm_eps], **config_kwargs)
+                        hidden_size=config_dict["hidden_size"], num_hidden_layers=config_dict["num_hidden_layers"], \
+                        num_attention_heads=config_dict["num_attention_heads"], intermediate_size=config_dict["intermediate_size"], \
+                        hidden_act=config_dict["hidden_act"], hidden_dropout_prob=config_dict["hidden_dropout_prob"], \
+                        attention_probs_dropout_prob=config_dict["attention_probs_dropout_prob"], type_vocab_size=config_dict["type_vocab_size"], \
+                        initializer_range=config_dict["initializer_range"], layer_norm_eps=config_dict["layer_norm_eps"], **config_kwargs)
 
     if args.continue_training:
         if data_args.max_seq_length == 128:
@@ -289,7 +296,7 @@ def main():
             logger.error("max_seq_length should be set to 128 or 512")
     else:
         logger.info("Training new model from scratch, max_seq={}".format(data_args.max_seq_length))
-        model = BertForMaskedLM.from_config(config)
+        model = BertForMaskedLM(config)
 
     model.resize_token_embeddings(len(tokenizer))
 
@@ -426,8 +433,10 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         elif last_checkpoint is not None:
             checkpoint = last_checkpoint
+        logger.info("*** Starting training ***")
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
+        logger.info("*** Model saved ***")
         metrics = train_result.metrics
 
         max_train_samples = (
