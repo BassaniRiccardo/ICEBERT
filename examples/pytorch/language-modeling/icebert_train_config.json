@@ -1,11 +1,12 @@
 {
 	"model_type": "uncased_baseline",
 	"train_file" : "path_to_training_corpus",
+	"config_file" : "config_files/small_bert.json",
 	"max_seq_length" : 512,
 	"continue_training" = 0,
 
-	"icebert_folder" : "/Users/ricca/Thesis/transformers/examples/pytorch/language-modeling/icebert",
-	"output_models_folder" : "/Users/ricca/Thesis/transformers/examples/pytorch/language-modeling/output_models",
+	"icebert_folder" : "transformers/examples/pytorch/language-modeling/icebert",
+	"output_models_folder" : "transformers/examples/pytorch/language-modeling/output_models",
 
 	"max_train_samples" : 100,
 	"max_eval_samples" : 10

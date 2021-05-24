@@ -172,6 +172,12 @@ def add_custom_args(hf_parser):
             default="/Users/ricca/Thesis/transformers/examples/pytorch/language-modeling/output_models",
             help="Path to folder containing pretrained_models"
     )
+    hf_parser.add_argument(
+            '--config_file',
+            type=str,
+            defualt="config_files/small_bert.json",
+            help="Path of the BertConfig json file, relative to the icebert folder"
+        )
     hf_parser.add_argument('--continue_training', type=int, default=0, help="Whether to continue training or starting from scratch")
     return hf_parser
 
@@ -253,13 +259,20 @@ def main():
         "use_auth_token": True if model_args.use_auth_token else None,
     }
     tokenizer = BertTokenizer.from_pretrained( (Path(args.icebert_folder) / (data_args.max_seq_length + "_tokenizers") / (args.model_type + "_tokenizer")), **tokenizer_kwargs)
-
+    
+    with open(Path(args.icebert_folder) / args.config_file, 'r') as fp:
+        config_dict = json.load(fp)
     config_kwargs = {
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
     }
-    config = BertConfig(vocab_size=tokenizer.vocab_size, max_position_embeddings=data_args.max_seq_length, **config_kwargs)
+    config = BertConfig(vocab_size=tokenizer.vocab_size, max_position_embeddings=data_args.max_seq_length, \
+                        hidden_size=config_dict[hidden_size], num_hidden_layers=config_dict[num_hidden_layers], \
+                        num_attention_heads=config_dict[num_attention_heads], intermediate_size=config_dict[intermediate_size], \
+                        hidden_act=config_dict[hidden_act], hidden_dropout_prob=config_dict[hidden_dropout_prob], \
+                        attention_probs_dropout_prob=config_dict[attention_probs_dropout_prob], type_vocab_size=config_dict[type_vocab_size], \
+                        initializer_range=config_dict[initializer_range], layer_norm_eps=config_dict[layer_norm_eps], **config_kwargs)
 
     if args.continue_training:
         if data_args.max_seq_length == 128:
