@@ -31,20 +31,37 @@ The torch xla distribution is required for TPUs training. Need free TPUs? Check 
 1. Download wikipedia Dumps.
 2. Extract .xml dumps to .txt files using the WikiExtractor script.
 3. For each language, concatenate short sentences in the corpus so that all lines contain a number of tokens close to MAX_SEQ.
-This must be done manually here, since TPUs require the --line_by_line flag. While doing this, also lowercase the baseline corpus and create the cID corpus for each language.
-    python create_oversampled_wikicorpus.py  preprocess 
+
+This must be done manually here, since TPUs require the --line_by_line flag. While doing this, also lowercase the baseline corpus and create the cID corpus for each language. 
+    
+    <python create_oversampled_wikicorpus.py  preprocess>
+
 If we want to include a first training with max_seq=128, we must also run:
-    python create_oversampled_wikicorpus.py  preprocess --max_seq 128
+
+    <python create_oversampled_wikicorpus.py  preprocess --max_seq 128>
+
 4. Compute the number of lines per corpus:
-    python create_oversampled_wikicorpus.py  count_lines
+
+    <python create_oversampled_wikicorpus.py  count_lines>
+
 5. Get the oversampled number of lines (default ALPHA=0.3, cite paper) per language:
-    python create_oversampled_wikicorpus.py  derive_lines
-6. Create a single large corpus. English lines are mantained, while other languages' ones are duplicated. Shuffle the obtained corpus. Do this for both the baseline and the model:
+
+    <python create_oversampled_wikicorpus.py  derive_lines>
+
+6. Create a single large corpus. English lines are mantained, while other languages' ones are duplicated. Shuffle the obtained corpus. Do this for both the baseline and the model: 
+    
+    ```
     python create_oversampled_wikicorpus.py  oversample
     python create_oversampled_wikicorpus.py  oversample --cid
+    ```
+
 If we want to include a first training with max_seq=128, we must also run:
+
+    ```
     python create_oversampled_wikicorpus.py  oversample --max_seq 128
     python create_oversampled_wikicorpus.py  oversample --cid --max_seq 128
+    ```
+
 As oversampling factors, we can use the same independently from the max_seq.
 
 
