@@ -13,14 +13,14 @@
 # limitations under the License.
 
 """
-A simple launcher script for TPU training
+A simple launcher script for TPU training.
+run_mlm.py can be called both with a sequence of args or with a single json file arg.
 
 Inspired by https://github.com/pytorch/pytorch/blob/master/torch/distributed/launch.py
 
 ::
     >>> python xla_spawn.py --num_cores=NUM_CORES_YOU_HAVE
-               run_mlm.py (--arg1 --arg2 --arg3 and all other
-               arguments of your training script)
+               run_mlm_icebert.py (--icebert_train_config.json)
 
 """
 
