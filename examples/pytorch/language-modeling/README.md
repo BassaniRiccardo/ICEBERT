@@ -22,12 +22,8 @@ The ICEBERT model builds on the BERT model, but includes 9 different languages:
 {Arabic, Bengali, English, Finnish, Indonesian, Korean, Russian, Swahili, Telugu}.
 
 ### TODO
-* Is the tokenizer loaded correctly? Should some files be renamed to match what the code is loolking for?
-  Or is it better to just build a new vocabulary from the correct vocab.txt file?
 * is the 2-phases training handled correclty, or should we do as if we were training from scratch and then specify a checpoint (in the training code around line 413?)
 * is the output models location set correclty?
-* model.resize_token_embeddings(len(tokenizer))         ?? now we are setting voc_size to tokenizer.vocab_size != len(tokenizer)
-
 
 ### Requirements
 
@@ -84,46 +80,13 @@ As oversampling factors, we can use the same independently from the max_seq.
 ### Training
 
 Training arguments are listed at https://github.com/huggingface/transformers/blob/master/src/transformers/training_args.py .
-Instead of using a icebert_train_config.json file (custom arguments not supported), choose the script from here.
-Consider creating .sh scripts for convenience.
-
-* CPU/GPU: call the run_mlm_icebert.py script:
+Scripts for small-bert and bert-base training can be found in the bash_scripts folder. To run without TPUs simply remove the wrap:
 
  ```bash
-!python run_mlm_icebert.py 	--model_type uncased_baseline \
-    --train_file /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/baseline_training_corpus.txt \
-    --config_file /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/icebert/config_files/small_bert.json \
-    --max_seq_length  128 \
-    --continue_training 0 \
-    --icebert_folder /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/icebert \
-    --output_models_folder /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models \
-    --max_train_samples 100 \
-    --max_eval_samples 10 \
-    --do_train True \
-    --do_eval False \
-    --output_dir /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models \
-```
+xla_spawn.py --num_cores=NUM_CORES_YOU_HAVE 
+ ```
 
 
-* TPU: call the training script from xla_spawn.py:
-
-```bash
-python xla_spawn.py \
-        --num_cores=NUM_CORES_YOU_HAVE \
-        run_mlm_icebert.py ( --model_type uncased_baseline \
-            --train_file /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/baseline_training_corpus.txt \
-            --config_file /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/icebert/config_files/small_bert.json \
-            --max_seq_length  128 \
-            --continue_training 0 \
-            --icebert_folder /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/icebert \
-            --output_models_folder /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models \
-            --max_train_samples 100 \
-            --max_eval_samples 10 \
-            --do_train True \
-            --do_eval False \
-            --output_dir /content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models
-        )
-```
    
 
 

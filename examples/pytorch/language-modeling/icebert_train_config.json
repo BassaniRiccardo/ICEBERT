@@ -9,6 +9,7 @@
 	"output_models_folder" : "transformers/examples/pytorch/language-modeling/output_models",
 
 	"max_train_samples" : 100,
-	"max_eval_samples" : 10
+	"max_eval_samples" : 10,
+	"resume_from_checkpoints" : None
 
 }

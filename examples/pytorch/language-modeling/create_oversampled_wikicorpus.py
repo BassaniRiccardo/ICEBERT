@@ -15,7 +15,7 @@ from transformers import BertTokenizerFast
 
 # TODO add the actions, follow the README
 
-logging.basicConfig(filename="logger",
+logging.basicConfig(filename="logger_data_creation",
                         filemode='a',
                         format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                         datefmt='%H:%M:%S',
@@ -54,6 +54,12 @@ def parse_args():
         default="transformers/examples/pytorch/language-modeling/data"
     )
     parser.add_argument(
+    '--lines_limits_path',
+    type=str,
+    help='Specify absolute path to the json files containing the number of dense lines to generate for each language.',
+    default=None
+    )
+    parser.add_argument(
         '--languages',
         type=str,
         help='Specify the languages as 2-letters code separated by commas, without spaces.',
@@ -61,6 +67,7 @@ def parse_args():
     )
     parser.add_argument("--max_seq", type=int, help="The maximum number of tokens in a sequence", default=512)
     parser.add_argument("--ALPHA", type=float, help="The alpha parameter of the exponential sampling. The closer to zero, the higher the oversampling", default=0.3)
+    parser.add_argument('--lowercase_corpus', action='store_true')
 
     # Arguments for the cID mapping
     parser.add_argument('--cid', action='store_true')
@@ -88,13 +95,13 @@ def parse_args():
 
 def get_corpus(ln, dense=True, cid=False):
     if cid:
-        return Path(args.data_folder) / ("cID_dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
+        return Path(args.data_folder) / "dense_cid" / ("cID_dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
     if dense:
-        return Path(args.data_folder) / ("dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
-    return Path(args.data_folder) / (ln + ".txt")
+        return Path(args.data_folder) / "dense" / ("dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
+    return Path(args.data_folder) / "original" / (ln + ".txt")
 
 
-def preprocess_corpus(ln, mapper, max_seq):
+def preprocess_corpus(ln, mapper, max_seq, lines_limit=None):
     """
     Merge/separate lines so that every line is made of approximately max_seq tokens. Create:
         - a new baseline corpus, lowercased.
@@ -114,8 +121,9 @@ def preprocess_corpus(ln, mapper, max_seq):
             dense_line = []
             cID_dense_line = []
             line_length = 0
+            number_of_dense_lines = 0
             for line in tqdm(lines_list):
-                sentences = sentence_tokenizer.segment_string(line)
+                sentences = sentence_tokenizer.segment_string(line, lowercase=args.lowercase_corpus)
                 # we work at sentence level (not line level, to avoid cutting very long lines)
                 for sentence in sentences:
                     cIDs = encode_cID(fast_tokenize(sentence, ln, tokenizer, mark=True), mapper)
@@ -126,9 +134,13 @@ def preprocess_corpus(ln, mapper, max_seq):
                     if line_length > max_seq:
                         dense_corpus.write(" ".join(dense_line) + "\n")
                         cID_dense_corpus.write(" ".join(cID_dense_line) + "\n")
+                        number_of_dense_lines += 1
                         dense_line = []
                         cID_dense_line = []
                         line_length = 0
+                if lines_limit:
+                  if number_of_dense_lines >= lines_limit:
+                    break
        
     return
 
@@ -181,9 +193,15 @@ def create_oversampled_file(oversampling_factors):
     indexes = load_or_generate_shuffle_indexes(len(union_lines_list))
     logger.info(f"shuffling lines list...")
     shuffled_line_list = [union_lines_list[index] for index in indexes]
-    outfile = "model_training_corpus.txt" if args.cid else "baseline_training_corpus.txt"
-    logger.info(f"writing lines to file...")
-    with open(Path(args.data_folder) / outfile, "x") as out:
+    if args.cid:
+        outfile = "model_tc.txt"
+    else:
+        if args.lowercase_corpus:
+            outfile = "uncased_baseline_tc.txt"
+        else:
+            outfile = "cased_baseline_tc.txt"
+    logger.info(f"writing lines to {outfile}...")
+    with open(Path(args.data_folder) / "final_corpora" / outfile, "x") as out:
         for line in tqdm(shuffled_line_list):
             out.write(line)
 
@@ -208,8 +226,14 @@ def main(args):
     if args.action == "preprocess":
         nltk.download('punkt')
         cid_mapper = pickle.load(open(Path(args.icebert_folder) / args.cid_mapper_pickle_path, "rb"))
+        lines_limit_voc = {}
         for ln in args.languages.split(","):
-            preprocess_corpus(ln, cid_mapper, args.max_seq)
+          lines_limit_voc[ln] = None
+        if args.lines_limits_path:
+            with open(Path(args.lines_limits_path), 'r') as fp:
+              lines_limit_voc = json.load(fp)
+        for ln in args.languages.split(","):
+            preprocess_corpus(ln, cid_mapper, args.max_seq, lines_limit_voc[ln])
     elif args.action == "count_lines":
         lines_voc = {}
         for ln in args.languages.split(","):
@@ -234,7 +258,7 @@ def main(args):
             oversampling_factors = json.load(fp)
         create_oversampled_file(oversampling_factors)
     # here debugging actions
-    elif args.actions == "preprocess_test_corpus":
+    elif args.action == "preprocess_test_corpus":
         nltk.download('punkt')
         cid_mapper = pickle.load(open(Path(args.icebert_folder) / args.cid_mapper_pickle_path, "rb"))
         create_dense_corpora(original_corpus_path, dense_corpus_path, cID_dense_corpus_path, mapper, ln, max_seq)

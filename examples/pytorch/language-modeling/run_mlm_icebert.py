@@ -26,6 +26,7 @@ import math
 import os
 import sys
 import json
+import pickle
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -48,7 +49,7 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version
 
-from transformers import BertConfig, BertTokenizer, BertForMaskedLM
+from transformers import BertConfig, BertTokenizerFast, BertForMaskedLM
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.7.0.dev0")
@@ -174,18 +175,27 @@ def add_custom_args(hf_parser):
             help="Path to folder containing icebert utils and files"
     )  
     hf_parser.add_argument(
-            '--output_models_folder',
-            type=str,
-            default="/Users/ricca/Thesis/transformers/examples/pytorch/language-modeling/output_models",
-            help="Path to folder containing pretrained_models"
-    )
-    hf_parser.add_argument(
             '--config_file',
             type=str,
             default="config_files/small_bert.json",
             help="Path of the BertConfig json file, relative to the icebert folder"
         )
     hf_parser.add_argument('--continue_training', type=int, default=0, help="Whether to continue training or starting from scratch")
+    hf_parser.add_argument('--load_tokenized_dataset', type=int, default=0, help="TO IMPLEMENT: CURRENT VERSION NOT WORKING (Whether to load an already tokenized dataset or tokenize the given one).")
+    hf_parser.add_argument(
+            '--pretrained_model_dir',
+            type=str,
+            default=None,
+            help="Path to folder containing the pretrained model. This should have max_seq_length=128. Use this arg when continuing the training in the max_seq_length=512 phase"
+    )  
+    hf_parser.add_argument(
+            '--tokenized_datasets',
+            type=str,
+            default=None,
+            help="TO IMPLEMENT: CURRENT VERSION NOT WORKING (name of the file where the tokenized dataset is cached)"
+    )  
+
+    
     return hf_parser
 
 
@@ -241,6 +251,7 @@ def main():
     set_seed(training_args.seed)
 
     # Build the datasets: you can either provide your own CSV/JSON/TXT training and evaluation files (see below)
+    # if not args.load_tokenized_dataset:
     data_files = {}
     if data_args.train_file is not None:
         data_files["train"] = data_args.train_file
@@ -265,8 +276,7 @@ def main():
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
     }
-    tokenizer = BertTokenizer.from_pretrained( (Path(args.icebert_folder) / (str(data_args.max_seq_length) + "_tokenizers") / (model_args.model_type + "_tokenizer")), **tokenizer_kwargs)
-    
+    tokenizer = BertTokenizerFast.from_pretrained( (Path(args.icebert_folder) / (str(data_args.max_seq_length) + "_tokenizers") / (model_args.model_type + "_tokenizer")), **tokenizer_kwargs)
     with open(Path(args.icebert_folder) / args.config_file, 'r') as fp:
         config_dict = json.load(fp)
     config_kwargs = {
@@ -286,7 +296,7 @@ def main():
             logger.error("With max_seq=128, you should train a new model from scratch")
         elif data_args.max_seq_length == 512:
             model = BertForMaskedLM.from_pretrained(
-            pretrained_model_name_or_path  = (Path(args.output_model_folder) / (model_args.model_type + "_128")),
+            pretrained_model_name_or_path  = args.pretrained_model_dir,
             config=config,
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
@@ -301,97 +311,109 @@ def main():
     model.resize_token_embeddings(len(tokenizer))
 
     # Preprocessing the datasets.
-    # First we tokenize all the texts.
-    if training_args.do_train:
-        column_names = datasets["train"].column_names
-    else:
-        column_names = datasets["validation"].column_names
-    text_column_name = "text" if "text" in column_names else column_names[0]
+    if not args.load_tokenized_dataset:
 
-    if data_args.max_seq_length is None:
-        max_seq_length = tokenizer.model_max_length
-        if max_seq_length > 1024:
-            logger.warning(
-                f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
-                "Picking 1024 instead. You can change that default value by passing --max_seq_length xxx."
+        # First we tokenize all the texts.
+        if training_args.do_train:
+            column_names = datasets["train"].column_names
+        else:
+            column_names = datasets["validation"].column_names
+        text_column_name = "text" if "text" in column_names else column_names[0]
+
+        if data_args.max_seq_length is None:
+            max_seq_length = tokenizer.model_max_length
+            if max_seq_length > 1024:
+                logger.warning(
+                    f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
+                    "Picking 1024 instead. You can change that default value by passing --max_seq_length xxx."
+                )
+                max_seq_length = 1024
+        else:
+            if data_args.max_seq_length > tokenizer.model_max_length:
+                logger.warning(
+                    f"The max_seq_length passed ({data_args.max_seq_length}) is larger than the maximum length for the"
+                    f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
+                )
+            max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
+
+        if data_args.line_by_line:
+            # When using line_by_line, we just tokenize each nonempty line.
+            padding = "max_length" if data_args.pad_to_max_length else False
+
+            def tokenize_function(examples):
+                # Remove empty lines
+                examples["text"] = [line for line in examples["text"] if len(line) > 0 and not line.isspace()]
+                return tokenizer(
+                    examples["text"],
+                    padding=padding,
+                    truncation=True,
+                    max_length=max_seq_length,
+                    # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
+                    # receives the `special_tokens_mask`.
+                    return_special_tokens_mask=True,
+                )
+
+            if not args.load_tokenized_dataset:
+              print("Starting dataset tokenization")
+              tokenized_datasets = datasets.map(
+                  tokenize_function,
+                  batched=True,
+                  num_proc=data_args.preprocessing_num_workers,
+                  remove_columns=[text_column_name],
+                  load_from_cache_file=not data_args.overwrite_cache,
+              )
+              if args.tokenized_datasets:
+                pickle.dump(tokenized_datasets, open(args.tokenized_datasets, "wb"))
+              print("Ending dataset tokenization")
+
+        else:
+            # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
+            # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
+            # efficient when it receives the `special_tokens_mask`.
+            def tokenize_function(examples):
+                return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
+
+            tokenized_datasets = datasets.map(
+                tokenize_function,
+                batched=True,
+                num_proc=data_args.preprocessing_num_workers,
+                remove_columns=column_names,
+                load_from_cache_file=not data_args.overwrite_cache,
             )
-            max_seq_length = 1024
-    else:
-        if data_args.max_seq_length > tokenizer.model_max_length:
-            logger.warning(
-                f"The max_seq_length passed ({data_args.max_seq_length}) is larger than the maximum length for the"
-                f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
+
+            # Main data processing function that will concatenate all texts from our dataset and generate chunks of
+            # max_seq_length.
+            def group_texts(examples):
+                # Concatenate all texts.
+                concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+                total_length = len(concatenated_examples[list(examples.keys())[0]])
+                # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
+                # customize this part to your needs.
+                total_length = (total_length // max_seq_length) * max_seq_length
+                # Split by chunks of max_len.
+                result = {
+                    k: [t[i : i + max_seq_length] for i in range(0, total_length, max_seq_length)]
+                    for k, t in concatenated_examples.items()
+                }
+                return result
+
+            # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a
+            # remainder for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value
+            # might be slower to preprocess.
+            #
+            # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
+            # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
+
+            tokenized_datasets = tokenized_datasets.map(
+                group_texts,
+                batched=True,
+                num_proc=data_args.preprocessing_num_workers,
+                load_from_cache_file=not data_args.overwrite_cache,
             )
-        max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
 
-    if data_args.line_by_line:
-        # When using line_by_line, we just tokenize each nonempty line.
-        padding = "max_length" if data_args.pad_to_max_length else False
-
-        def tokenize_function(examples):
-            # Remove empty lines
-            examples["text"] = [line for line in examples["text"] if len(line) > 0 and not line.isspace()]
-            return tokenizer(
-                examples["text"],
-                padding=padding,
-                truncation=True,
-                max_length=max_seq_length,
-                # We use this option because DataCollatorForLanguageModeling (see below) is more efficient when it
-                # receives the `special_tokens_mask`.
-                return_special_tokens_mask=True,
-            )
-
-        tokenized_datasets = datasets.map(
-            tokenize_function,
-            batched=True,
-            num_proc=data_args.preprocessing_num_workers,
-            remove_columns=[text_column_name],
-            load_from_cache_file=not data_args.overwrite_cache,
-        )
     else:
-        # Otherwise, we tokenize every text, then concatenate them together before splitting them in smaller parts.
-        # We use `return_special_tokens_mask=True` because DataCollatorForLanguageModeling (see below) is more
-        # efficient when it receives the `special_tokens_mask`.
-        def tokenize_function(examples):
-            return tokenizer(examples[text_column_name], return_special_tokens_mask=True)
-
-        tokenized_datasets = datasets.map(
-            tokenize_function,
-            batched=True,
-            num_proc=data_args.preprocessing_num_workers,
-            remove_columns=column_names,
-            load_from_cache_file=not data_args.overwrite_cache,
-        )
-
-        # Main data processing function that will concatenate all texts from our dataset and generate chunks of
-        # max_seq_length.
-        def group_texts(examples):
-            # Concatenate all texts.
-            concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-            total_length = len(concatenated_examples[list(examples.keys())[0]])
-            # We drop the small remainder, we could add padding if the model supported it instead of this drop, you can
-            # customize this part to your needs.
-            total_length = (total_length // max_seq_length) * max_seq_length
-            # Split by chunks of max_len.
-            result = {
-                k: [t[i : i + max_seq_length] for i in range(0, total_length, max_seq_length)]
-                for k, t in concatenated_examples.items()
-            }
-            return result
-
-        # Note that with `batched=True`, this map processes 1,000 texts together, so group_texts throws away a
-        # remainder for each of those groups of 1,000 texts. You can adjust that batch_size here but a higher value
-        # might be slower to preprocess.
-        #
-        # To speed up this part, we use multiprocessing. See the documentation of the map method for more information:
-        # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.map
-
-        tokenized_datasets = tokenized_datasets.map(
-            group_texts,
-            batched=True,
-            num_proc=data_args.preprocessing_num_workers,
-            load_from_cache_file=not data_args.overwrite_cache,
-        )
+        tokenized_datasets = pickle.load(open(args.tokenized_datasets, "rb"))
+        print("tokenized dataset loaded")
 
     if training_args.do_train:
         if "train" not in tokenized_datasets:
