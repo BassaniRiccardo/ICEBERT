@@ -1,17 +1,21 @@
 #!/bin/bash
 
-# Call the tpu training for a small-bert model, according to Dufter & Schutze setup
+# Run TPU training for a small-bert model, according to Dufter & Schutze setup (changes: 10x lines, 0.1x epochs)
 # Only parametrized args should be modified.
 
 ICEBERT_FOLDER="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/icebert"
 CONFIG_FILE="small_bert.json"
 
 MODEL_TYPE="cased_baseline"
-TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/small_training_corpus_cased_baseline_512.txt"
+TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/180k_data/final_corpora/cased_baseline_tc_512.txt"
 OUTPUT_DIR="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models/small_tpu_cased_baseline_512"
 
+# MODEL_TYPE="uncased_baseline"
+# TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/180k_data/final_corpora/uncased_baseline_tc_512.txt"
+# OUTPUT_DIR="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models/small_tpu_uncased_baseline_512"
+
 # MODEL_TYPE="model"
-# TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/model_512_training_corpus.txt"
+# TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/180k_data/final_corpora/model_tc_512.txt"
 # OUTPUT_DIR="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models/small_512_tpu_model"
 
 python xla_spawn.py \
@@ -22,7 +26,7 @@ python xla_spawn.py \
             --overwrite_output_dir False \
             --config_file $ICEBERT_FOLDER/config_files/$CONFIG_FILE \
             --max_seq_length  512 \
-            --num_train_epochs 3 \
+            --num_train_epochs 10 \
             --learning_rate 2e-3 \
             --warmup_steps 50 \
             --adam_beta1 0.9 \

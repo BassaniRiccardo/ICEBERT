@@ -98,8 +98,7 @@ def get_corpus(ln, dense=True, cid=False):
         return Path(args.data_folder) / "dense_cid" / ("cID_dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
     if dense:
         return Path(args.data_folder) / "dense" / ("dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
-    return Path("/content/drive/MyDrive/transformers/examples/pytorch/language-modeling/data/") / (ln + ".txt")
-    # return Path(args.data_folder) / "original" / (ln + ".txt")
+    return Path(args.data_folder) / "original" / (ln + ".txt")
 
 
 def preprocess_corpus(ln, mapper, max_seq):
@@ -245,7 +244,7 @@ def create_oversampled_file(oversampling_factors):
         else:
             outfile = "cased_baseline_tc.txt"
     logger.info(f"writing lines to {outfile}...")
-    with open(Path(args.data_folder) / "final_corpora" / outfile, "x") as out:
+    with open(Path(args.data_folder) / "final_corpora" / (outfile + '_' + str(args.max_seq)), "x") as out:
         for line in tqdm(shuffled_line_list):
             out.write(line)
 

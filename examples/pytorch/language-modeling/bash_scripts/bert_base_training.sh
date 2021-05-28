@@ -7,15 +7,15 @@ ICEBERT_FOLDER="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/lang
 CONFIG_FILE="bert_base.json"
 
 MODEL_TYPE="cased_baseline"
-TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/base_training_corpus_cased_baseline_512.txt"
+TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/final_corpora/cased_baseline_tc_512.txt"
 OUTPUT_DIR="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models/base_tpu_cased_baseline_512"
 
 # MODEL_TYPE="uncased_baseline"
-# TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/base_training_corpus_uncased_baseline_512.txt"
+# TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/final_corpora/uncased_baseline_tc_512.txt"
 # OUTPUT_DIR="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models/base_tpu_uncased_baseline_512"
 
 # MODEL_TYPE="model"
-# TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/base_training_corpus_model_512.txt"
+# TRAIN_FILE="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/data/final_corpora/model_tc_512.txt"
 # OUTPUT_DIR="/content/drive/MyDrive/Thesis/transformers/examples/pytorch/language-modeling/output_models/base_tpu_model_512"
 
 python xla_spawn.py \
