@@ -98,10 +98,11 @@ def get_corpus(ln, dense=True, cid=False):
         return Path(args.data_folder) / "dense_cid" / ("cID_dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
     if dense:
         return Path(args.data_folder) / "dense" / ("dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
-    return Path(args.data_folder) / "original" / (ln + ".txt")
+    return Path("/content/drive/MyDrive/transformers/examples/pytorch/language-modeling/data/") / (ln + ".txt")
+    # return Path(args.data_folder) / "original" / (ln + ".txt")
 
 
-def preprocess_corpus(ln, mapper, max_seq, lines_limit=None):
+def preprocess_corpus(ln, mapper, max_seq):
     """
     Merge/separate lines so that every line is made of approximately max_seq tokens. Create:
         - a new baseline corpus, lowercased.
@@ -121,7 +122,6 @@ def preprocess_corpus(ln, mapper, max_seq, lines_limit=None):
             dense_line = []
             cID_dense_line = []
             line_length = 0
-            number_of_dense_lines = 0
             for line in tqdm(lines_list):
                 sentences = sentence_tokenizer.segment_string(line, lowercase=args.lowercase_corpus)
                 # we work at sentence level (not line level, to avoid cutting very long lines)
@@ -134,13 +134,57 @@ def preprocess_corpus(ln, mapper, max_seq, lines_limit=None):
                     if line_length > max_seq:
                         dense_corpus.write(" ".join(dense_line) + "\n")
                         cID_dense_corpus.write(" ".join(cID_dense_line) + "\n")
-                        number_of_dense_lines += 1
                         dense_line = []
                         cID_dense_line = []
                         line_length = 0
-                if lines_limit:
-                  if number_of_dense_lines >= lines_limit:
-                    break
+       
+    return
+
+
+def preprocess_corpus_fixed_lines(ln, mapper, max_seq, lines_limit):
+    """
+    Merge/separate lines so that every line is made of approximately max_seq tokens. Create:
+        - a new baseline corpus, lowercased.
+        - a new cID corpus, made of cID-strings.
+    """
+    original_corpus_path=get_corpus(ln, dense=False, cid=False)
+    dense_corpus_path=get_corpus(ln, dense=True, cid=False)
+    cID_dense_corpus_path=get_corpus(ln, dense=False, cid=True)
+    
+
+    with open(original_corpus_path, "r", encoding='utf-8') as original_corpus, \
+            open(dense_corpus_path, "x", encoding='utf-8') as dense_corpus, \
+            open(cID_dense_corpus_path, "x", encoding='utf-8') as cID_dense_corpus:
+            lines_list = original_corpus.read().splitlines()
+            tokenizer = BertTokenizerFast(Path(args.icebert_folder) / args.monolingual_tokenizers_root_path / (ln + '.txt'), do_lower_case=False, add_special_tokens = True)
+            sentence_tokenizer = NLTKSegmenter()
+            dense_line = []
+            cID_dense_line = []
+            line_length = 0
+            # avoid reading beyond the EOF
+            line_index = 0
+            number_of_dense_lines = 0
+            tot_lines = len(lines_list)
+            while number_of_dense_lines < lines_limit:
+                  # reset the lines counter
+                  if line_index == tot_lines:
+                    line_index=0
+                  sentences = sentence_tokenizer.segment_string(lines_list[line_index], lowercase=args.lowercase_corpus)
+                  line_index += 1
+                  # we work at sentence level (not line level, to avoid cutting very long lines)
+                  for sentence in sentences:
+                      cIDs = encode_cID(fast_tokenize(sentence, ln, tokenizer, mark=True), mapper)
+                      line_length += len(cIDs)
+                      dense_line.append(sentence.strip())
+                      cID_dense_line.append(" ".join(cIDs).strip())
+                      # if we reach the maximum number of tokens, we wrote down the dense sentence and start building a new one.
+                      if line_length > max_seq:
+                          dense_corpus.write(" ".join(dense_line) + "\n")
+                          cID_dense_corpus.write(" ".join(cID_dense_line) + "\n")
+                          number_of_dense_lines += 1
+                          dense_line = []
+                          cID_dense_line = []
+                          line_length = 0
        
     return
 
@@ -226,14 +270,14 @@ def main(args):
     if args.action == "preprocess":
         nltk.download('punkt')
         cid_mapper = pickle.load(open(Path(args.icebert_folder) / args.cid_mapper_pickle_path, "rb"))
-        lines_limit_voc = {}
-        for ln in args.languages.split(","):
-          lines_limit_voc[ln] = None
         if args.lines_limits_path:
-            with open(Path(args.lines_limits_path), 'r') as fp:
-              lines_limit_voc = json.load(fp)
-        for ln in args.languages.split(","):
-            preprocess_corpus(ln, cid_mapper, args.max_seq, lines_limit_voc[ln])
+          with open(Path(args.lines_limits_path), 'r') as fp:
+            lines_limit_voc = json.load(fp)
+          for ln in args.languages.split(","):
+            preprocess_corpus_fixed_lines(ln, cid_mapper, args.max_seq, lines_limit_voc[ln])
+        else:
+          for ln in args.languages.split(","):
+            preprocess_corpus(ln, cid_mapper, args.max_seq)
     elif args.action == "count_lines":
         lines_voc = {}
         for ln in args.languages.split(","):
