@@ -8,6 +8,7 @@ import pickle
 import json
 import random
 from pathlib import Path
+import multiprocessing as mp
 from argparse import REMAINDER, ArgumentParser
 
 from icebert.cid_mapping import fast_tokenize, encode_cID
@@ -15,11 +16,16 @@ from transformers import BertTokenizerFast
 
 # TODO add the actions, follow the README
 
-logging.basicConfig(filename="logger_data_creation",
-                        filemode='a',
-                        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                        datefmt='%H:%M:%S',
-                        level=logging.INFO)
+file_handler = logging.FileHandler(filename='logger_data_creation')
+stdout_handler = logging.StreamHandler(sys.stdout)
+handlers = [file_handler, stdout_handler]
+
+logging.basicConfig(
+        format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+        level=logging.INFO,
+        handlers=handlers
+)
 logger = logging.getLogger(__name__)
 
 class NLTKSegmenter:
@@ -50,14 +56,27 @@ def parse_args():
     parser.add_argument(
         '--data_folder',
         type=str,
-        help='Specify absolute path to the folder containg data.',
-        default="transformers/examples/pytorch/language-modeling/data"
+        help='Specify absolute path to the folder containg preprocessed data.',
+        default="home/riccardobassani17/bucket/transformers/examples/pytorch/language-modeling/data"
     )
     parser.add_argument(
-    '--lines_limits_path',
-    type=str,
-    help='Specify absolute path to the json files containing the number of dense lines to generate for each language.',
-    default=None
+        '--original_data_folder',
+        type=str,
+        help='Specify absolute path to the folder containg the original data.',
+        default="home/riccardobassani17/bucket/transformers/examples/pytorch/language-modeling/data"
+    )
+    parser.add_argument(
+        '--mp_input_folder',
+        type=str,
+        help="Specify absolute path to the folder containing txt data split into smaller files (for multiprocessing)",
+        default=None
+    )
+    parser.add_argument('--multiprocessing', action='store_true')
+    parser.add_argument(
+        '--lines_limits_path',
+        type=str,
+        help='Specify absolute path to the json files containing the number of dense lines to generate for each language.',
+        default=None
     )
     parser.add_argument(
         '--languages',
@@ -87,7 +106,7 @@ def parse_args():
         '--icebert_folder',
         type=str,
         help='Specify absolute path to the folder containg icebert utils and files.',
-        default="/Users/ricca/Thesis/transformers/examples/pytorch/language-modeling/icebert"
+        default="/home/riccardobassani17/bucket/transformers/transformers/examples/pytorch/language-modeling/icebert"
     )
 
     return parser.parse_args()
@@ -98,7 +117,7 @@ def get_corpus(ln, dense=True, cid=False):
         return Path(args.data_folder) / "dense_cid" / ("cID_dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
     if dense:
         return Path(args.data_folder) / "dense" / ("dense_wiki_" + ln + "_" + str(args.max_seq) + ".txt")
-    return Path(args.data_folder) / "original" / (ln + ".txt")
+    return Path(args.original_data_folder) / (ln + "_.txt")
 
 
 def preprocess_corpus(ln, mapper, max_seq):
@@ -111,33 +130,55 @@ def preprocess_corpus(ln, mapper, max_seq):
     dense_corpus_path=get_corpus(ln, dense=True, cid=False)
     cID_dense_corpus_path=get_corpus(ln, dense=False, cid=True)
     
+    def create_dense_files(original_corpus_path, dense_corpus_path, cID_dense_corpus_path, ln, mapper, max_seq):
+        with open(original_corpus_path, "r", encoding='utf-8') as original_corpus, \
+                open(dense_corpus_path, "x", encoding='utf-8') as dense_corpus, \
+                open(cID_dense_corpus_path, "x", encoding='utf-8') as cID_dense_corpus:
+                lines_list = original_corpus.read().splitlines()
+                tokenizer = BertTokenizerFast(Path(args.icebert_folder) / args.monolingual_tokenizers_root_path / (ln + '.txt'), do_lower_case=False, add_special_tokens = True)
+                sentence_tokenizer = NLTKSegmenter()
+                dense_line = []
+                cID_dense_line = []
+                line_length = 0
+                marked_lines = 0
+                for line in tqdm(lines_list):
+                    if not (line[:6] == "</doc>" or line[:4] == "<doc"):
+                        sentences = sentence_tokenizer.segment_string(line, lowercase=args.lowercase_corpus)
+                        # we work at sentence level (not line level, to avoid cutting very long lines)
+                        for sentence in sentences:
+                            cIDs = encode_cID(fast_tokenize(sentence, ln, tokenizer, mark=True), mapper)
+                            line_length += len(cIDs)
+                            dense_line.append(sentence.strip())
+                            cID_dense_line.append(" ".join(cIDs).strip())
+                            # if we reach the maximum number of tokens, we wrote down the dense sentence and start building a new one.
+                            if line_length > max_seq:
+                                dense_corpus.write(" ".join(dense_line) + "\n")
+                                cID_dense_corpus.write(" ".join(cID_dense_line) + "\n")
+                                dense_line = []
+                                cID_dense_line = []
+                                line_length = 0
+                    else:
+                        marked_lines += 1
+        return marked_lines
 
-    with open(original_corpus_path, "r", encoding='utf-8') as original_corpus, \
-            open(dense_corpus_path, "x", encoding='utf-8') as dense_corpus, \
-            open(cID_dense_corpus_path, "x", encoding='utf-8') as cID_dense_corpus:
-            lines_list = original_corpus.read().splitlines()
-            tokenizer = BertTokenizerFast(Path(args.icebert_folder) / args.monolingual_tokenizers_root_path / (ln + '.txt'), do_lower_case=False, add_special_tokens = True)
-            sentence_tokenizer = NLTKSegmenter()
-            dense_line = []
-            cID_dense_line = []
-            line_length = 0
-            for line in tqdm(lines_list):
-                sentences = sentence_tokenizer.segment_string(line, lowercase=args.lowercase_corpus)
-                # we work at sentence level (not line level, to avoid cutting very long lines)
-                for sentence in sentences:
-                    cIDs = encode_cID(fast_tokenize(sentence, ln, tokenizer, mark=True), mapper)
-                    line_length += len(cIDs)
-                    dense_line.append(sentence.strip())
-                    cID_dense_line.append(" ".join(cIDs).strip())
-                    # if we reach the maximum number of tokens, we wrote down the dense sentence and start building a new one.
-                    if line_length > max_seq:
-                        dense_corpus.write(" ".join(dense_line) + "\n")
-                        cID_dense_corpus.write(" ".join(cID_dense_line) + "\n")
-                        dense_line = []
-                        cID_dense_line = []
-                        line_length = 0
-       
+    create_dense_files(original_corpus_path, dense_corpus_path, cID_dense_corpus_path, ln, mapper, max_seq)
+    
     return
+
+
+def mp_preprocessing(chunck_path):
+    """
+    Preprocess multiple chunks OF THE SAME LANGUAGE in parallel
+    """
+    ln = args.languages
+    mapper = pickle.load(open(Path(args.icebert_folder) / args.cid_mapper_pickle_path, "rb"))
+    max_seq = args.max_seq
+    filenumber = ((os.path.split(chunck_path)[-1]).split('.')[0]).split('_')[-1]
+    logger.info(f"preprocessing chunk {filenumber}...")
+    dense_corpus_path = Path(args.data_folder) / "dense" / (ln + "_chunks") / (filenumber + ".txt")
+    cID_dense_corpus_path = Path(args.data_folder) / "dense_cid" / (ln + "_chunks") / (filenumber + ".txt")
+    marked_lines = create_dense_files(chunck_path, dense_corpus_path, cID_dense_corpus_path, ln, mapper, max_seq)
+    logger.info(f"finished preprocessing chunk {filenumber}: {marked_lines} marked lines")
 
 
 def preprocess_corpus_fixed_lines(ln, mapper, max_seq, lines_limit):
@@ -269,14 +310,22 @@ def main(args):
     if args.action == "preprocess":
         nltk.download('punkt')
         cid_mapper = pickle.load(open(Path(args.icebert_folder) / args.cid_mapper_pickle_path, "rb"))
-        if args.lines_limits_path:
-          with open(Path(args.lines_limits_path), 'r') as fp:
-            lines_limit_voc = json.load(fp)
-          for ln in args.languages.split(","):
-            preprocess_corpus_fixed_lines(ln, cid_mapper, args.max_seq, lines_limit_voc[ln])
+        # preprocess multiple chunks in parallel
+        if args.multiprocessing:
+            cpus = mp.cpu_count()
+            pool = mp.Pool(cpus)
+            logger.info(f"Starting preprocessing: {cpus} cpus.")
+            result = pool.map(mp_preprocessing, os.listdir(args.mp_input_folder))
+        # if we have a lines limit we do not need multiprocessing since file are relatively small
         else:
-          for ln in args.languages.split(","):
-            preprocess_corpus(ln, cid_mapper, args.max_seq)
+            if args.lines_limits_path:
+              with open(Path(args.lines_limits_path), 'r') as fp:
+                lines_limit_voc = json.load(fp)
+              for ln in args.languages.split(","):
+                preprocess_corpus_fixed_lines(ln, cid_mapper, args.max_seq, lines_limit_voc[ln])
+            else:
+              for ln in args.languages.split(","):
+                preprocess_corpus(ln, cid_mapper, args.max_seq)
     elif args.action == "count_lines":
         lines_voc = {}
         for ln in args.languages.split(","):

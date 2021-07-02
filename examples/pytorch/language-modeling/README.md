@@ -16,75 +16,96 @@ limitations under the License.
 
 
 
-## ICEBERT Language model training
+# ICEBERT Language model training
 
 The ICEBERT model builds on the BERT model, but includes 9 different languages:
 {Arabic, Bengali, English, Finnish, Indonesian, Korean, Russian, Swahili, Telugu}.
 
-### TODO
-* is the 2-phases training handled correclty, or should we do as if we were training from scratch and then specify a checpoint (in the training code around line 413?)
-* is the output models location set correclty?
-
-### Requirements
+## Requirements
 
 The torch xla distribution is required for TPUs training. Need free TPUs? Check https://www.tensorflow.org/tfrc .
 
+## Setup
 
-### Data preparation
+### Virtual Cluster Creation
+
+NOTE: Be aware of GCP costs, escpeciall for TPUs. Also, make sure you storage bucket is in the same zone of your machines.
+
+gcloud config set project YOUT_PROJECT
+gcloud config set compute/zone YOUR_ZONE
+gcloud compute tpus execution-groups create --name=GROUP_NAME --zone=YOUR_ZONE --tf-version=2.4.1 --disk-size=1000GB --machine-type=n2d-highmem-8 --accelerator-type=v3-8
+
+
+### Setup Python
+
+sudo apt update 
+sudo apt install python3 python3-dev python3-venv 
+sudo apt-get install wget 
+wget https://bootstrap.pypa.io/get-pip.py 
+sudo python3 get-pip.py
+python3 -m venv prep
+source prep/bin/activate		
+
+
+### Install required packages
+
+sudo apt install git
+pip install -U pip
+pip install git+https://github.com/huggingface/transformers
+pip install numpy
+pip install tqdm
+pip install datasets
+pip install sentencepiece
+pip install protobuf
+pip install cloud-tpu-client==0.10 https://storage.googleapis.com/tpu-pytorch/wheels/torch_xla-1.8.1-cp37-cp37m-linux_x86_64.whl
+pip install torch
+
+
+### Mount you Bucket
+
+mkdir bucket
+export GCSFUSE_REPO=gcsfuse-bionic main
+echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | sudo tee /etc/apt/sources.list.d/gcsfuse.list
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+sudo apt-get update
+sudo apt-get install gcsfuse
+gcsfuse --implicit-dirs icebert PATH_WHERE_YOUR_BUCKET_WILL_BE_MOUNTED
+
+
+
+## Data preparation
 
 1. Download wikipedia Dumps.
-2. Extract .xml dumps to .txt files using the WikiExtractor script.
+2. Extract .xml dumps to .txt files using the WikiExtractor script. Use only smaller chunks for the small corpus creation.
+
+**Steps 3-6 can be performed by running the desired script from the bash_script folder.**
+Change the root of the directory variables according to your directory structure.
+
 3. For each language, concatenate short sentences in the corpus so that all lines contain a number of tokens close to MAX_SEQ.
-
 This must be done manually here, since TPUs require the --line_by_line flag. While doing this, also lowercase the baseline corpus and create the cID corpus for each language. 
-
-```bash   
-python create_oversampled_wikicorpus.py  preprocess
-```
-
-If we want to include a first training with max_seq=128, we must also run:
- 
-```bash   
-python create_oversampled_wikicorpus.py  preprocess --max_seq 128
-```
 
 4. Compute the number of lines per corpus:
 
-```bash
-python create_oversampled_wikicorpus.py  count_lines
-```
+5. Get the oversampled number of lines (default ALPHA=0.3) per language:
 
-5. Get the oversampled number of lines (default ALPHA=0.3, cite paper) per language:
+6. Create a single large corpus. English lines are mantained, while other languages' ones are duplicated.
+Shuffle the obtained corpus. Do this for both the baseline and the model. 
 
-```bash
-python create_oversampled_wikicorpus.py  derive_lines
-```
-
-6. Create a single large corpus. English lines are mantained, while other languages' ones are duplicated. Shuffle the obtained corpus. Do this for both the baseline and the model: 
-    
-```bash
-python create_oversampled_wikicorpus.py  oversample
-python create_oversampled_wikicorpus.py  oversample --cid
-```
-
-If we want to include a first training with max_seq=128, we must also run:
-
-```bash
-python create_oversampled_wikicorpus.py  oversample --max_seq 128
-python create_oversampled_wikicorpus.py  oversample --cid --max_seq 128
-```
-
-As oversampling factors, we can use the same independently from the max_seq.
+For multiprocessing:
+- add the argument --multiprocessing
+- specify --mp_input_folder, the absolute path to the folder containing txt data split into smaller files 
 
 
-### Training
+
+## Training
 
 Training arguments are listed at https://github.com/huggingface/transformers/blob/master/src/transformers/training_args.py .
-Scripts for small-bert and bert-base training can be found in the bash_scripts folder. To run without TPUs simply remove the wrap:
+Scripts for small-bert and bert-base training can be found in the bash_scripts folder. 
+The current scripts yield an undertrained ICEBERT-base model. 
+The training takes around 5 days with the given script, an n2d-highmem-8 vcpu and a single v3-8 TPU. 
+Increment the number of training steps or the batch size for a more performing model.
+This would probably require using a TPU-pod.
 
- ```bash
-xla_spawn.py --num_cores=NUM_CORES_YOU_HAVE 
- ```
 
 
    
@@ -92,7 +113,7 @@ xla_spawn.py --num_cores=NUM_CORES_YOU_HAVE
 
 
 
-## HuggingFace general language model training
+# HuggingFace general language model training
 
 Fine-tuning (or training from scratch) the library models for language modeling on a text dataset for GPT, GPT-2,
 ALBERT, BERT, DistilBERT, RoBERTa, XLNet... GPT and GPT-2 are trained or fine-tuned using a causal language modeling
