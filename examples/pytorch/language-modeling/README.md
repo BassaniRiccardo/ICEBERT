@@ -18,6 +18,9 @@ limitations under the License.
 
 # ICEBERT Language model training
 
+This repository guides you through the training of an ICEBERT-base model.
+The files necessary for the training are already provided in the repo. If you want to create those files from scratch, follow the [icebert clustering notebook](https://github.com/BassaniRiccardo/transformers/blob/master/examples/pytorch/language-modeling/icebert/clustering_notebooks/icebert_clustering.ipynb).
+
 The ICEBERT model builds on the BERT model, but includes 9 different languages:
 {Arabic, Bengali, English, Finnish, Indonesian, Korean, Russian, Swahili, Telugu}.
 
@@ -61,7 +64,7 @@ pip install cloud-tpu-client==0.10 https://storage.googleapis.com/tpu-pytorch/wh
 pip install torch
 
 
-### Mount you Bucket
+### Mount your Bucket
 
 mkdir bucket
 export GCSFUSE_REPO=gcsfuse-bionic main
@@ -108,10 +111,18 @@ This would probably require using a TPU-pod.
 
 
 
-   
 
+<br />
+<br />
+<br />
+<br />
 
+<h3 align="center"> Below you find the original README from huggingface </h3>
 
+<br />
+<br />
+<br />
+<br />
 
 # HuggingFace general language model training
 
