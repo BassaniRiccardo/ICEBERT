@@ -3,7 +3,7 @@
 <h3 align="center">
 This project forks the Transformers repository: Below you find the original Transformers README.
     
-Go to the [README of the ICEBERT project](https://github.com/BassaniRiccardo/transformers/blob/master/examples/pytorch/language-modeling/README.md) instead.
+Go to the [ICEBERT project](https://github.com/BassaniRiccardo/transformers/blob/master/examples/pytorch/language-modeling) instead.
 </h3>
 
 <br/><br/>
