@@ -34,45 +34,45 @@ The torch xla distribution is required for TPUs training. Need free TPUs? Check 
 
 NOTE: Be aware of GCP costs, escpeciall for TPUs. Also, make sure you storage bucket is in the same zone of your machines.
 
-gcloud config set project YOUT_PROJECT
-gcloud config set compute/zone YOUR_ZONE
-gcloud compute tpus execution-groups create --name=GROUP_NAME --zone=YOUR_ZONE --tf-version=2.4.1 --disk-size=1000GB --machine-type=n2d-highmem-8 --accelerator-type=v3-8
+    gcloud config set project YOUR_PROJECT
+    gcloud config set compute/zone YOUR_ZONE
+    gcloud compute tpus execution-groups create --name=GROUP_NAME --zone=YOUR_ZONE --tf-version=2.4.1 --disk-size=1000GB --machine-type=n2d-highmem-8 --accelerator-type=v3-8
 
 
 ### Setup Python
 
-sudo apt update 
-sudo apt install python3 python3-dev python3-venv 
-sudo apt-get install wget 
-wget https://bootstrap.pypa.io/get-pip.py 
-sudo python3 get-pip.py
-python3 -m venv prep
-source prep/bin/activate		
+    sudo apt update 
+    sudo apt install python3 python3-dev python3-venv 
+    sudo apt-get install wget 
+    wget https://bootstrap.pypa.io/get-pip.py 
+    sudo python3 get-pip.py
+    python3 -m venv prep
+    source prep/bin/activate		
 
 
 ### Install required packages
 
-sudo apt install git
-pip install -U pip
-pip install git+https://github.com/huggingface/transformers
-pip install numpy
-pip install tqdm
-pip install datasets
-pip install sentencepiece
-pip install protobuf
-pip install cloud-tpu-client==0.10 https://storage.googleapis.com/tpu-pytorch/wheels/torch_xla-1.8.1-cp37-cp37m-linux_x86_64.whl
-pip install torch
+    sudo apt install git
+    pip install -U pip
+    pip install git+https://github.com/huggingface/transformers
+    pip install numpy
+    pip install tqdm
+    pip install datasets
+    pip install sentencepiece
+    pip install protobuf
+    pip install cloud-tpu-client==0.10 https://storage.googleapis.com/tpu-pytorch/wheels/torch_xla-1.8.1-cp37-cp37m-linux_x86_64.whl
+    pip install torch
 
 
 ### Mount your Bucket
 
-mkdir bucket
-export GCSFUSE_REPO=gcsfuse-bionic main
-echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | sudo tee /etc/apt/sources.list.d/gcsfuse.list
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-sudo apt-get update
-sudo apt-get install gcsfuse
-gcsfuse --implicit-dirs icebert PATH_WHERE_YOUR_BUCKET_WILL_BE_MOUNTED
+    mkdir bucket
+    export GCSFUSE_REPO=gcsfuse-bionic main
+    echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | sudo tee /etc/apt/sources.list.d/gcsfuse.list
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+    sudo apt-get update
+    sudo apt-get install gcsfuse
+    gcsfuse --implicit-dirs icebert PATH_WHERE_YOUR_BUCKET_WILL_BE_MOUNTED
 
 
 
@@ -102,9 +102,11 @@ For multiprocessing:
 
 ## Training
 
-Training arguments are listed at https://github.com/huggingface/transformers/blob/master/src/transformers/training_args.py .
-Scripts for small-bert and bert-base training can be found in the bash_scripts folder. 
-The current scripts yield an undertrained ICEBERT-base model. 
+Scripts for small-bert and bert-base training can be found in the **bash_scripts folder**. 
+
+Training arguments are listed at https://github.com/huggingface/transformers/blob/master/src/transformers/training_args.py . 
+
+The current scripts yield an undertrained ICEBERT-base model.
 The training takes around 5 days with the given script, an n2d-highmem-8 vcpu and a single v3-8 TPU. 
 Increment the number of training steps or the batch size for a more performing model.
 This would probably require using a TPU-pod.
